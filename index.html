@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>STM32F103 进阶极客研习社 - 江科大进阶实战工作台</title>
-  <link rel="stylesheet" href="css/style.css?v=2.1">
+  <link rel="stylesheet" href="css/style.css?v=2.2">
 </head>
 <body>
 
@@ -32,9 +32,6 @@
       <div class="hud-pill" id="hud-progress">
         <span>学习打卡: <strong style="color:var(--green-neon);">0/17</strong> (0%)</span>
       </div>
-      <button class="btn-copy-code" id="btn-open-deploy" style="background: rgba(0, 240, 255, 0.15); border-color: var(--cyan-primary); color: var(--cyan-primary);">
-        🌐 让所有人/手机打开
-      </button>
     </div>
 
     <!-- 手机端汉堡折叠按钮 -->
@@ -79,44 +76,8 @@
 
   </div>
 
-  <!-- ================= 全球上线 GitHub Pages 指南弹窗 ================= -->
-  <div class="modal-overlay" id="deploy-modal">
-    <div class="modal-box">
-      <div class="modal-header">
-        <h2>🚀 如何让任何人的手机和电脑随时随地访问此网站？</h2>
-        <button class="modal-close" id="modal-close">&times;</button>
-      </div>
-      
-      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
-        因为本项目是<strong>纯前端免配置静态网页</strong>，你可以直接把它免费发布到 <strong>GitHub Pages</strong>。无需买服务器、无需域名备案，全球秒开！
-      </p>
-
-      <div class="modal-step">
-        <strong>第一步：在 GitHub 上新建仓库</strong><br>
-        登录 GitHub，点击右上角 “New repository”，新建一个公开仓库，例如命名为 <code>stm32-study</code>。
-      </div>
-
-      <div class="modal-step">
-        <strong>第二步：将本项目文件上传到该仓库</strong><br>
-        将本文件夹 <code>D:\Antigravity\STM32_Study_Portal</code> 下的所有文件（<code>index.html</code>、<code>css/</code>、<code>js/</code>、<code>README.md</code>）推送到该 GitHub 仓库的 <code>main</code> 分支根目录下。
-      </div>
-
-      <div class="modal-step">
-        <strong>第三步：一键开启 GitHub Pages</strong><br>
-        在 GitHub 仓库页面点击 <strong>Settings</strong> -> 左侧菜单点击 <strong>Pages</strong> -> 在 “Build and deployment” 下的 Branch 选择 <code>main</code> 分支与 <code>/ (root)</code> 目录，点击 <strong>Save</strong>。
-      </div>
-
-      <div class="modal-step" style="border-left: 3px solid var(--green-neon); background: rgba(0,255,136,0.06);">
-        <strong>第四步：完成！获取专属公开网址</strong><br>
-        等待大约 1 分钟刷新，GitHub 会为你生成一个专属链接：<br>
-        <code style="color: var(--cyan-primary); font-size: 13px;">https://&lt;你的GitHub用户名&gt;.github.io/stm32-study/</code><br>
-        把这个链接发给同学、老师，或者在微信与手机浏览器中点开，任何人随时随地都能学习！
-      </div>
-    </div>
-  </div>
-
   <!-- 引入逻辑脚本 (加版本号强制突破手机与浏览器本地缓存) -->
-  <script src="js/data.js?v=2.1"></script>
-  <script src="js/app.js?v=2.1"></script>
+  <script src="js/data.js?v=2.2"></script>
+  <script src="js/app.js?v=2.2"></script>
 </body>
 </html>

@@ -98,7 +98,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const mobileToggle = document.getElementById("mobile-toggle");
   const sidebar = document.getElementById("sidebar");
   const sidebarBackdrop = document.getElementById("sidebar-backdrop");
-  const deployModal = document.getElementById("deploy-modal");
 
   // 1. 渲染导航分类与手风琴
   function renderNav(filterKeyword = "") {
@@ -1189,21 +1188,6 @@ document.addEventListener("DOMContentLoaded", () => {
     sidebarBackdrop.addEventListener("click", () => {
       sidebar.classList.remove("open");
       sidebarBackdrop.classList.remove("open");
-    });
-  }
-
-  // 部署弹窗
-  const deployBtn = document.getElementById("btn-open-deploy");
-  const modalClose = document.getElementById("modal-close");
-  if (deployBtn && deployModal) {
-    deployBtn.addEventListener("click", () => deployModal.classList.add("open"));
-  }
-  if (modalClose && deployModal) {
-    modalClose.addEventListener("click", () => deployModal.classList.remove("open"));
-  }
-  if (deployModal) {
-    deployModal.addEventListener("click", (e) => {
-      if (e.target === deployModal) deployModal.classList.remove("open");
     });
   }
 
