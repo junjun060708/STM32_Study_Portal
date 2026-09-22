@@ -1172,21 +1172,24 @@ body {
   color: var(--cyan-primary);
 }
 
-/* ================= 标准库代码展示 ================= */
+/* ================= 标准库代码展示 & 核心代码高亮系统 ================= */
 .code-card {
-  background: #090d16;
+  background: #080c16;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
 .code-header {
-  background: rgba(15, 23, 42, 0.85);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: #0e1626;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   padding: 10px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .code-title-wrap {
@@ -1195,22 +1198,49 @@ body {
   gap: 8px;
   font-family: var(--font-mono);
   font-size: 11.5px;
-  color: var(--text-muted);
+  color: #cbd5e1;
 }
 
-.code-badge {
-  color: var(--cyan-primary);
-  background: rgba(0, 240, 255, 0.1);
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 10px;
+.code-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.legend-dot-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.code-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-green {
+  background: #4ade80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.6);
+}
+
+.dot-amber {
+  background: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.8);
+}
+
+.dot-blue {
+  background: #38bdf8;
 }
 
 .btn-copy-code {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: var(--text-main);
-  padding: 4px 12px;
+  padding: 5px 14px;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: 11px;
@@ -1222,16 +1252,112 @@ body {
   background: var(--cyan-primary);
   color: #000;
   border-color: var(--cyan-primary);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
 }
 
 .code-body {
-  padding: 16px;
+  padding: 12px 0;
   margin: 0;
   overflow-x: auto;
-  font-family: var(--font-mono);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
   font-size: 12.5px;
-  line-height: 1.55;
+  line-height: 1.65;
+  background: #060913;
+}
+
+.code-line {
+  display: flex;
+  align-items: baseline;
+  padding: 1px 16px;
+  min-width: 100%;
+  box-sizing: border-box;
+  transition: background 0.15s ease;
+}
+
+.code-line:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.line-num {
+  width: 38px;
+  text-align: right;
+  padding-right: 14px;
+  color: #475569;
+  user-select: none;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.line-code {
+  flex-grow: 1;
+  white-space: pre;
   color: #e2e8f0;
+}
+
+/* 本章节核心学习内容高亮重点行 (特殊颜色标记) */
+.code-line.is-core-line {
+  background: rgba(245, 158, 11, 0.13) !important;
+  border-left: 3px solid #f59e0b !important;
+  box-shadow: inset 0 0 12px rgba(245, 158, 11, 0.06);
+}
+
+.code-line.is-core-line .line-num {
+  color: #f59e0b;
+  font-weight: bold;
+}
+
+.core-tag {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.4));
+  border: 1px solid #f59e0b;
+  color: #fef08a;
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 12px;
+  white-space: nowrap;
+  font-weight: bold;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+  user-select: none;
+  animation: pulse-core 2.5s infinite;
+}
+
+@keyframes pulse-core {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 1; box-shadow: 0 0 12px rgba(245, 158, 11, 0.6); }
+}
+
+/* 语法高亮 Token 颜色：绿色注释与各语法分类 */
+.c-comment {
+  color: #4ade80 !important; /* 绿色中文注释 */
+  font-style: italic;
+}
+
+.c-core-api {
+  color: #fbbf24 !important; /* 本章核心 API 金黄亮色高亮 */
+  font-weight: 700;
+  text-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+}
+
+.c-keyword {
+  color: #38bdf8 !important; /* C语言关键字：天蓝 */
+  font-weight: 600;
+}
+
+.c-stm32 {
+  color: #c084fc !important; /* 标准库函数与宏：亮紫 */
+}
+
+.c-string {
+  color: #f472b6 !important; /* 字符串常量：粉红 */
+}
+
+.c-number {
+  color: #34d399 !important; /* 数字与十六进制：青绿 */
+}
+
+.c-preproc {
+  color: #60a5fa !important; /* 宏定义与预编译：宝石蓝 */
+  font-weight: 600;
 }
 
 /* ================= 避坑指南卡片 ================= */

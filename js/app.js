@@ -421,11 +421,16 @@ document.addEventListener("DOMContentLoaded", () => {
             <span class="code-badge">C SOURCE</span>
             <span>STM32F10x 标准库 V3.5.0 规范驱动 (UTF-8 中文注释)</span>
           </div>
+          <div class="code-legend">
+            <span class="legend-dot-item"><span class="code-legend-dot dot-green"></span><span style="color:#86efac;">绿色教学注释</span></span>
+            <span class="legend-dot-item"><span class="code-legend-dot dot-amber"></span><span style="color:#fde047;">★ 本章核心掌握代码</span></span>
+            <span class="legend-dot-item"><span class="code-legend-dot dot-blue"></span><span style="color:#7dd3fc;">C关键字</span></span>
+          </div>
           <button class="btn-copy-code" id="btn-copy" data-code="${encodeURIComponent(ch.codeSnippet)}">
             📋 复制代码到 Keil
           </button>
         </div>
-        <pre class="code-body"><code>${escapeHTML(ch.codeSnippet)}</code></pre>
+        <div class="code-body">${renderHighlightedCode(ch.codeSnippet)}</div>
       </section>
 
       <!-- 避坑指南 -->
@@ -1060,6 +1065,109 @@ document.addEventListener("DOMContentLoaded", () => {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
+  }
+
+  // 语法高亮与核心代码特殊标记渲染器
+  function renderHighlightedCode(rawCode) {
+    if (!rawCode) return "";
+    const lines = rawCode.trim().split("\n");
+    const keywords = new Set([
+      "int", "char", "float", "double", "void", "long", "short", "signed", "unsigned",
+      "uint8_t", "uint16_t", "uint32_t", "uint64_t", "int8_t", "int16_t", "int32_t",
+      "typedef", "struct", "enum", "union", "static", "extern", "const", "volatile",
+      "if", "else", "switch", "case", "default", "break", "continue", "return",
+      "for", "while", "do", "goto", "sizeof"
+    ]);
+
+    const outputLines = [];
+
+    lines.forEach((line, idx) => {
+      const isCore = line.includes("[★本章核心学习重点]") || line.includes("[★本章核心]") || line.includes("[★核心安全外设]") || line.includes("[核心]") || line.includes("★");
+      
+      let pos = 0;
+      const len = line.length;
+      const parts = [];
+
+      while (pos < len) {
+        // 单行注释 //
+        if (line.substr(pos, 2) === "//") {
+          const commentText = line.substr(pos);
+          parts.push(`<span class="c-comment">${escapeHTML(commentText)}</span>`);
+          break;
+        }
+        // 多行注释 /* ... */
+        else if (line.substr(pos, 2) === "/*") {
+          const end = line.indexOf("*/", pos + 2);
+          if (end !== -1) {
+            parts.push(`<span class="c-comment">${escapeHTML(line.substring(pos, end + 2))}</span>`);
+            pos = end + 2;
+          } else {
+            parts.push(`<span class="c-comment">${escapeHTML(line.substr(pos))}</span>`);
+            break;
+          }
+        }
+        // 字符串 "..."
+        else if (line[pos] === '"') {
+          let end = pos + 1;
+          while (end < len && (line[end] !== '"' || line[end - 1] === "\\")) {
+            end++;
+          }
+          end = Math.min(end + 1, len);
+          parts.push(`<span class="c-string">${escapeHTML(line.substring(pos, end))}</span>`);
+          pos = end;
+        }
+        // 预编译指令 #include, #define
+        else if (pos === 0 && line.trim().startsWith("#")) {
+          parts.push(`<span class="c-preproc">${escapeHTML(line)}</span>`);
+          break;
+        }
+        // 单词与标识符
+        else if (/[a-zA-Z_]/.test(line[pos])) {
+          const match = line.substr(pos).match(/^[a-zA-Z_][a-zA-Z0-9_]*/);
+          if (match) {
+            const word = match[0];
+            if (keywords.has(word)) {
+              parts.push(`<span class="c-keyword">${escapeHTML(word)}</span>`);
+            } else if (
+              word.startsWith("GPIO_") || word.startsWith("RCC_") || word.startsWith("TIM_") ||
+              word.startsWith("I2C_") || word.startsWith("SPI_") || word.startsWith("USART_") ||
+              word.startsWith("RTC_") || word.startsWith("PWR_") || word.startsWith("IWDG_") ||
+              word.startsWith("WWDG_") || word.startsWith("FLASH_") || word.startsWith("NVIC_") ||
+              word.startsWith("EXTI_") || word.startsWith("BKP_") || word.startsWith("SysTick") ||
+              word.startsWith("SystemInit") || word === word.toUpperCase()
+            ) {
+              if (isCore) {
+                parts.push(`<span class="c-core-api">${escapeHTML(word)}</span>`);
+              } else {
+                parts.push(`<span class="c-stm32">${escapeHTML(word)}</span>`);
+              }
+            } else {
+              parts.push(escapeHTML(word));
+            }
+            pos += word.length;
+          } else {
+            parts.push(escapeHTML(line[pos]));
+            pos++;
+          }
+        }
+        // 数字 (十六进制与十进制)
+        else if (/^(0x[0-9a-fA-F]+|\d+)/.test(line.substr(pos))) {
+          const match = line.substr(pos).match(/^(0x[0-9a-fA-F]+|\d+)/);
+          parts.push(`<span class="c-number">${escapeHTML(match[0])}</span>`);
+          pos += match[0].length;
+        }
+        else {
+          parts.push(escapeHTML(line[pos]));
+          pos++;
+        }
+      }
+
+      const coreClass = isCore ? " is-core-line" : "";
+      const badge = isCore ? '<span class="core-tag">★ 本章核心</span>' : "";
+      outputLines.push(`<div class="code-line${coreClass}"><span class="line-num">${idx + 1}</span><span class="line-code">${parts.join("")}</span>${badge}</div>`);
+    });
+
+    return outputLines.join("");
   }
 
   // 搜索监听

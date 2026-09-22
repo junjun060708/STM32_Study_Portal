@@ -92,44 +92,62 @@ const COURSE_DATA = {
         notes: "CH1 呈现极其精准的 32.768kHz 微弱正弦波振荡（周期约 30.5us）；CH2 经过内部 32768 分频后，每整整 1 秒产生一次宽 1 毫秒的脉冲中断！"
       },
       codeSnippet: `/**
- * @brief  RTC 经典标准库配置驱动与防重复配置实现
+ * @file    bsp_rtc.c
+ * @brief   STM32F103C8T6 RTC 实时时钟与 BKP 备份寄存器完整驱动
+ * @note    时钟源: 外部 32.768kHz LSE 晶振 | 掉电由 VBAT 纽扣电池供电
  */
 #include "stm32f10x.h"
+#include <time.h>
 
+/**
+ * @brief  初始化 RTC 实时时钟 (防重复配置与暗号校验)
+ */
 void MyRTC_Init(void) {
-    // 1. 开启电源管理与备份域时钟
+    // 1. 开启电源管理 (PWR) 与备份域 (BKP) 外设时钟
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
     
-    // 2. 解锁备份域写保护
-    PWR_BackupAccessCmd(ENABLE);
-    
-    // 3. 检查 BKP 暗号是否等于 0xA5A5
-    if (BKP_ReadBackupRegister(BKP_DR1) != 0xA5A5) {
-        // 历史上第一次上电，启动外部 32.768kHz LSE
-        RCC_LSEConfig(RCC_LSE_ON);
-        while (RCC_GetFlagStatus(RCC_FLAG_LSERDY) == RESET); // 等待晶振稳定
+    // 2. 解除备份域写保护锁 (必须先解锁才能读写 BKP 与 RTC 寄存器)
+    PWR_BackupAccessCmd(ENABLE);                               // [★本章核心学习重点] 解锁备份域访问权限
+
+    // 3. 检查备份寄存器 BKP_DR1 中的自拟暗号 (0xA5A5)
+    if (BKP_ReadBackupRegister(BKP_DR1) != 0xA5A5) {           // [★本章核心学习重点] 校验开机暗号
+        // === 历史上首次上电，执行完整的初次走时初始化 ===
         
-        RCC_RTCCLKConfig(RCC_RTCCLKSource_LSE);
-        RCC_RTCCLKCmd(ENABLE);
+        // 4. 启动外部低速 32.768kHz 晶振 (LSE)
+        RCC_LSEConfig(RCC_LSE_ON);                             // [★本章核心学习重点] 开启 32.768kHz LSE
+        while (RCC_GetFlagStatus(RCC_FLAG_LSERDY) == RESET);   // 等待 LSE 晶振振荡稳定就绪
         
-        RTC_WaitForSynchro();
+        // 5. 选定 LSE 为 RTC 专用时钟源，并使能 RTC 外设
+        RCC_RTCCLKConfig(RCC_RTCCLKSource_LSE);                // [★本章核心学习重点] 选择 LSE 作为 RTC 时钟
+        RCC_RTCCLKCmd(ENABLE);                                 // [★本章核心学习重点] 开启 RTC 时钟总闸门
+        
+        // 6. 等待 RTC 寄存器与 APB1 总线完成时钟同步
+        RTC_WaitForSynchro();                                  // [★本章核心学习重点] 等待 RSF 标志位置 1 同步
+        RTC_WaitForLastTask();                                 // 等待上一次底层写操作完成
+        
+        // 7. 配置预分频器：32768Hz / (32767 + 1) = 1Hz (精准 1 秒递增 1 次)
+        RTC_SetPrescaler(32767);                               // [★本章核心学习重点] 设置 32768 分频产生 1Hz 秒脉冲
         RTC_WaitForLastTask();
         
-        // 32768Hz / (32767 + 1) = 1Hz (1秒递增1次)
-        RTC_SetPrescaler(32767);
+        // 8. 写入初始时间戳 (Unix Timestamp 秒数计数器)
+        RTC_SetCounter(1790088000);                            // [★本章核心学习重点] 写入 32 位初始秒计数初值
         RTC_WaitForLastTask();
         
-        // 设定基准时间戳 (以当前时间为例)
-        RTC_SetCounter(1790088000);
-        RTC_WaitForLastTask();
-        
-        // 刻下暗号！
-        BKP_WriteBackupRegister(BKP_DR1, 0xA5A5);
+        // 9. 在 BKP_DR1 写入暗号，标记系统已完成初始化！
+        BKP_WriteBackupRegister(BKP_DR1, 0xA5A5);              // [★本章核心学习重点] 写入 0xA5A5 防重复初始化暗号
     } else {
-        // 已经运行中，只做同步等待
-        RTC_WaitForSynchro();
+        // === 非首次开机（软复位或断电但有纽扣电池维持走时）===
+        // 此时绝不能调用 RTC_SetCounter()，仅需同步即可保持秒数连续递增！
+        RTC_WaitForSynchro();                                  // 仅同步 APB1 时钟
         RTC_WaitForLastTask();
     }
+}
+
+/**
+ * @brief  获取当前 RTC 计数值 (Unix 时间戳秒数)
+ */
+uint32_t MyRTC_GetCounter(void) {
+    return RTC_GetCounter();                                   // [★本章核心学习重点] 读取当前 32 位 RTC 计数值
 }`,
       pitfalls: [
         "写完任何 RTC 寄存器后，必须跟 RTC_WaitForLastTask()，否则 CPU 跑太快会导致下一次写操作被硬件直接吃掉！",
@@ -190,31 +208,54 @@ void MyRTC_Init(void) {
         notes: "运行模式下电流约为 32mA；进入 Sleep 后电流降至 11mA；进入 Stop 停止模式后电流直线俯冲至仅 24µA（示波器基线近乎贴地）！"
       },
       codeSnippet: `/**
- * @brief  PVD 掉电紧急抢救中断配置范例
+ * @file    bsp_pvd.c
+ * @brief   STM32F103 可编程电压监控 (PVD) 掉电紧急检测与抢救处理
+ * @note    当 VDD 电压跌破设定阈值时触发中断，抢在系统失电前保存核心参数
+ */
+#include "stm32f10x.h"
+
+/**
+ * @brief  配置 PVD 掉电可编程电压监控
+ * @param  None
  */
 void PVD_Emergency_Config(void) {
     NVIC_InitTypeDef NVIC_InitStructure;
     EXTI_InitTypeDef EXTI_InitStructure;
 
+    // 1. 开启电源管理外设 (PWR) 时钟
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
 
-    // 监控门槛设为 2.8V
-    PWR_PVDLevelConfig(PWR_PVDLevel_2V8);
-    PWR_PVDCmd(ENABLE);
+    // 2. 设定 PVD 门限电压 (例如 2.8V，VDD 跌破 2.8V 产生中断报警)
+    PWR_PVDLevelConfig(PWR_PVDLevel_2V8);                      // [★本章核心学习重点] 设定 PVD 监控阈值为 2.8V
+    
+    // 3. 使能 PVD 电压监测总开关
+    PWR_PVDCmd(ENABLE);                                        // [★本章核心学习重点] 开启 PVD 电压监控电路
 
-    // PVD 信号内部接在 EXTI16
-    EXTI_ClearITPendingBit(EXTI_Line16);
-    EXTI_InitStructure.EXTI_Line = EXTI_Line16;
+    // 4. 配置 PVD 关联的 EXTI 中断线 16
+    EXTI_InitStructure.EXTI_Line = EXTI_Line16;                // [★本章核心学习重点] EXTI Line 16 专用于 PVD 监控
     EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
-    EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising; // 跌破阈值
+    EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising;     // 电压越界产生上升沿脉冲
     EXTI_InitStructure.EXTI_LineCmd = ENABLE;
     EXTI_Init(&EXTI_InitStructure);
 
-    NVIC_InitStructure.NVIC_IRQChannel = PVD_IRQn;
-    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0; // 最高紧急
+    // 5. 配置 NVIC 中断向量优先级
+    NVIC_InitStructure.NVIC_IRQChannel = PVD_IRQn;             // [★本章核心学习重点] 配置 PVD 专有中断通道
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;  // 设为最高抢占优先级！
     NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
     NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
     NVIC_Init(&NVIC_InitStructure);
+}
+
+/**
+ * @brief  PVD 掉电紧急抢救中断服务函数
+ */
+void PVD_IRQHandler(void) {
+    if (EXTI_GetITStatus(EXTI_Line16) != RESET) {
+        // [★本章核心学习重点] 系统检测到主供电跌落，仅剩最后几毫秒电容余电！
+        // 立即执行最核心参数写入 BKP 或 Flash，关闭所有电机、高功耗外设
+        
+        EXTI_ClearITPendingBit(EXTI_Line16);                   // 清除中断标志位
+    }
 }`,
       pitfalls: [
         "睡眠模式下外设（如定时器、ADC）若还在跑，电流依然在 10mA 以上，要想真正省电必须进停止模式！",
@@ -276,41 +317,46 @@ void PVD_Emergency_Config(void) {
         notes: "真实示波器直击痛点：正常 72MHz 方波周期仅 13.8 纳秒；唤醒后退化为 8MHz，波形周期被活生生拉长到 125 纳秒！这就是为什么延时变慢、串口乱码的根本物理原因！"
       },
       codeSnippet: `/**
- * @brief  停止模式安全进入与唤醒后时钟恢复标准范式
+ * @file    bsp_pwr_modes.c
+ * @brief   STM32F103 停止模式 (Stop) 与待机模式 (Standby) 标准库驱动
+ * @note    停止模式保留 SRAM 变量；待机模式功耗最低 (2uA) 由 PA0 WKUP 唤醒
  */
 #include "stm32f10x.h"
 
+/**
+ * @brief  安全进入停止模式 (Stop Mode) 并在唤醒后自动恢复 72MHz 高速时钟
+ */
 void Enter_Stop_Safe(void) {
-    // 1. 关闭 LED 灭灯省电 (PC13 输出高电平)
-    GPIO_SetBits(GPIOC, GPIO_Pin_13);
-
-    // 2. 开启电源时钟
+    // 1. 开启电源管理外设时钟
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
+    
+    // 2. 挂起滴答定时器，防止 SysTick 中断秒级意外唤醒休眠
+    SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;
+    
+    // 3. 进入停止模式 (内部 LDO 设为低功耗模式，等待 WFI 外部按键中断唤醒)
+    PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI); // [★本章核心学习重点] 进入 STOP 停止模式 (微安级待机)
 
-    // 3. 正式进入停止模式 (程序冻结在此，等待按键中断唤醒)
-    PWR_EnterSTOPMode(PWR_Regulator_ON, PWR_STOPEntry_WFI);
-
-    // ================== 被按键唤醒后从这一行继续往下走 ==================
-
-    // 【极其致命的一步】唤醒后时钟为 8MHz HSI，必须立刻倍频回 72MHz HSE！
-    SystemInit();
-
-    // 点亮 LED 表示成功苏醒恢复活力
-    GPIO_ResetBits(GPIOC, GPIO_Pin_13);
+    // =======================================================
+    // ⚠️ 重点避坑：唤醒瞬间单片机时钟默认降级为内部 8MHz HSI！
+    // 必须在此处立即重新激活外部 8MHz 晶振并倍频至 72MHz！
+    // =======================================================
+    SystemInit();                                              // [★本章核心学习重点] 唤醒后必须重配 HSE+PLL 恢复 72MHz！
+    
+    // 4. 恢复 SysTick 滴答计时
+    SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk;
 }
 
 /**
- * @brief  进入待机模式 (微安级极限沉睡)
+ * @brief  配置并进入深度待机模式 (Standby Mode，功耗极低 2µA)
  */
 void Enter_Standby_Mode(void) {
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
     
-    // 使能 WKUP 引脚 (PA0 产生高电平即唤醒单片机)
-    PWR_WakeUpPinCmd(ENABLE);
-    PWR_ClearFlag(PWR_FLAG_WU);
+    // 开启 PA0 引脚的 WKUP 上升沿硬件唤醒功能
+    PWR_WakeUpPinCmd(ENABLE);                                  // [★本章核心学习重点] 使能 PA0(WKUP) 引脚待机唤醒
     
-    // 一键待机！从此这一行代码之后永远不会被执行，醒来后相当于重新按了开机键！
-    PWR_EnterSTANDBYMode();
+    // 进入待机模式 (内核 1.8V 电源完全断电，内存数据不保留，唤醒等同复位冷启动)
+    PWR_EnterSTANDBYMode();                                    // [★本章核心学习重点] 一键进入极限 STANDBY 待机模式
 }`,
       pitfalls: [
         "从 Stop 模式被唤醒后，如果没有写 SystemInit()，串口波特率会错乱、OLED 刷新变慢将近 9 倍！",
@@ -368,13 +414,39 @@ void Enter_Standby_Mode(void) {
         ],
         notes: "从 0x7F 减到 0x5F 为太早禁喂区；从 0x5F 减到 0x40 为绿色安全喂狗黄金窗口；跌破 0x40 立即触发硬件复位！"
       },
-      codeSnippet: `// IWDG 独立看门狗寄存器操作三句半口诀:
-// IWDG->KR = 0x5555; // 1. 开锁允许改分频
-// IWDG->PR = 4;      // 2. 选预分频 (64分频)
-// IWDG->RLR = 625;   // 3. 设重载值 (1秒超时)
-// IWDG->KR = 0xAAAA; // 4. 喂狗！计数器重新回满 625
-// IWDG->KR = 0xCCCC; // 5. 启动！从此开弓没有回头箭
-`,
+      codeSnippet: `/**
+ * @file    bsp_iwdg.c
+ * @brief   STM32 独立看门狗 (IWDG) 硬件寄存器时钟与初始化
+ * @note    独立时钟源: 内部专用 LSI ~40kHz (即使主晶振损坏也能准时复位)
+ */
+#include "stm32f10x.h"
+
+/**
+ * @brief  初始化独立看门狗 (超时时间设定为 1000ms)
+ */
+void IWDG_Init_Config(void) {
+    // 1. 写入 0x5555 关键字，解除对 PR 分频器和 RLR 重装载寄存器的写保护
+    IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);              // [★本章核心学习重点] 解锁 IWDG_PR 与 IWDG_RLR 写保护锁
+    
+    // 2. 配置时钟预分频为 64 分频 (40kHz / 64 = 625Hz，即计数器每 1.6ms 减 1)
+    IWDG_SetPrescaler(IWDG_Prescaler_64);                      // [★本章核心学习重点] 配置预分频器为 64 分频
+    
+    // 3. 配置重装载计数值为 625 (超时时间 = 625 * 1.6ms = 1000ms = 1.0秒)
+    IWDG_SetReload(625);                                       // [★本章核心学习重点] 设定重装载初值 625 (1秒超时)
+    
+    // 4. 首次装载计数值（写入 0xAAAA 执行喂狗，重载为 625）
+    IWDG_ReloadCounter();                                      // [★本章核心学习重点] 写入 0xAAAA 喂狗并载入重载值
+    
+    // 5. 启动看门狗计时（写入 0xCCCC 启动硬件，启动后无法通过软件关闭！）
+    IWDG_Enable();                                             // [★本章核心学习重点] 启动看门狗硬件 (硬件锁死不可逆)
+}
+
+/**
+ * @brief  主循环中周期性调用的喂狗函数
+ */
+void IWDG_Feed(void) {
+    IWDG_ReloadCounter();                                      // [★本章核心学习重点] 周期性给看门狗喂骨头，重置 1000ms 倒计时
+}`,
       pitfalls: [
         "IWDG 一旦启动，软件没有任何命令能把它关闭！只有系统发生硬件复位才能停止。",
         "内部 LSI 振荡器精度较低（在 30kHz ~ 60kHz 波动），算超时时间千万留足 30% 以上余量！",
@@ -433,36 +505,41 @@ void Enter_Standby_Mode(void) {
         notes: "单片机正常运行时 NRST 为 3.3V 高电平；当 1000ms 倒计时结束未喂狗，硬件内部看门狗瞬间将 NRST 拉低约 20 微秒，强制芯片冷复位！"
       },
       codeSnippet: `/**
- * @brief  IWDG 独立看门狗标准配置 (1000ms 超时)
+ * @file    bsp_wwdg.c
+ * @brief   STM32 窗口看门狗 (WWDG) 规范驱动与时间窗口喂狗
+ * @note    由 APB1 总线时钟分频，严格限制喂狗区间：太早喂狗或太晚喂狗均会立刻复位！
  */
 #include "stm32f10x.h"
 
-void IWDG_Config(void) {
-    // 1. 解锁寄存器写保护 (写入 0x5555)
-    IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);
-    
-    // 2. 64 分频: 40kHz / 64 = 625Hz (每数 1 个花 1.6ms)
-    IWDG_SetPrescaler(IWDG_Prescaler_64);
-    
-    // 3. 重装载 625: 625 * 1.6ms = 1000ms
-    IWDG_SetReload(625);
-    
-    // 4. 首次喂狗
-    IWDG_ReloadCounter();
-    
-    // 5. 启动看门狗 (写入 0xCCCC)
-    IWDG_Enable();
+/**
+ * @brief  初始化窗口看门狗 (WWDG)
+ * @note   PCLK1 = 36MHz, 预分频 8, 计数器时钟 = 36MHz / 4096 / 8 = 1098.6Hz (每计数约 0.91ms)
+ */
+void WWDG_Config(void) {
+    // 1. 开启 WWDG 外设时钟 (位于 APB1 低速总线)
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_WWDG, ENABLE);
+
+    // 2. 配置时钟预分频 (WDGTB = 8 分频)
+    WWDG_SetPrescaler(WWDG_Prescaler_8);                       // [★本章核心学习重点] 配置 WWDG 8 分频
+
+    // 3. 设置上限时间窗口值 (例如 0x5F，当计数器高于此值时喂狗会直接引发硬件复位！)
+    WWDG_SetWindowValue(0x5F);                                 // [★本章核心学习重点] 设定喂狗上限窗口值 Window = 0x5F
+
+    // 4. 使能 WWDG 并装入 7 位计数值 0x7F (下限阈值固化在 0x40，跌破 0x40 产生复位)
+    WWDG_Enable(0x7F);                                         // [★本章核心学习重点] 使能 WWDG 并将计数器置为初值 0x7F
 }
 
-int main(void) {
-    // 初始化外设...
-    IWDG_Config();
-
-    while (1) {
-        // 执行主要业务逻辑...
-        
-        // 及时喂狗报平安
-        IWDG_ReloadCounter();
+/**
+ * @brief  合规的窗口喂狗函数
+ * @note   必须在 0x40 < 计数器 < 0x5F 的安全绿窗时间内执行！
+ */
+void WWDG_Safe_Feed(void) {
+    // 读取当前 7 位递减计数器实时值
+    uint8_t current_val = WWDG->CR & 0x7F;                     // [★本章核心学习重点] 实时检测当前 7 位计数值
+    
+    // 只有进入安全窗口区间才允许喂狗
+    if (current_val < 0x5F && current_val > 0x40) {
+        WWDG_SetCounter(0x7F);                                 // [★本章核心学习重点] 在合法窗口内将计数器重装回 0x7F
     }
 }`,
       pitfalls: [
@@ -524,12 +601,36 @@ int main(void) {
         ],
         notes: "Flash 擦除需要数十毫秒的电荷释放时间，期间 BSY 位一直为 1，CPU 必须等待其完成，绝对不可断电！"
       },
-      codeSnippet: `// Flash 底层标准操作四部曲口诀:
-// 1. FLASH_Unlock();                     // 拿两把钥匙 (KEY1/KEY2) 打开保险箱
-// 2. FLASH_ErasePage(0x0800FC00);        // 拿抹布擦干净第 63 页 (全变 0xFFFF)
-// 3. FLASH_ProgramHalfWord(addr, data);  // 拿笔写入 16 位的半字数据
-// 4. FLASH_Lock();                       // 完事必须关上保险箱，上锁防误写！
-`,
+      codeSnippet: `/**
+ * @file    bsp_flash_erase.c
+ * @brief   STM32F103 内部 Flash 物理页擦除与按半字 (16位) 编程底层操作
+ * @note    物理特性：写入前必须整页擦除为 0xFFFF，只能将 1 改为 0！
+ */
+#include "stm32f10x.h"
+
+#define FLASH_TEST_PAGE_ADDR  0x0800FC00  // 中容量 C8T6 最后一页 (Page 63)
+
+/**
+ * @brief  单页擦除与安全半字写入底层流程
+ */
+void Flash_EraseAndWrite_Demo(uint16_t data) {
+    // 1. 解开 Flash 控制寄存器写保护锁 (写入 KEY1=0x45670123, KEY2=0xCDEF89AB)
+    FLASH_Unlock();                                            // [★本章核心学习重点] 解锁 FPEC 闪存编程控制器
+
+    // 2. 清除上一次操作遗留的状态标志位
+    FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
+
+    // 3. 执行整页物理擦除 (该页 1024 字节数据全部复位为 0xFFFF)
+    FLASH_Status status = FLASH_ErasePage(FLASH_TEST_PAGE_ADDR); // [★本章核心学习重点] 物理页整页擦除 (全填 0xFFFF)
+    
+    // 4. 若擦除成功，将数据以 16 位半字 (HalfWord) 形式烧写进指定地址
+    if (status == FLASH_COMPLETE) {
+        FLASH_ProgramHalfWord(FLASH_TEST_PAGE_ADDR, data);     // [★本章核心学习重点] 按 16 位半字原子烧写数据到 Flash
+    }
+
+    // 5. 重新上锁保护 Flash，防止程序指针跑飞导致代码固件被意外篡改！
+    FLASH_Lock();                                              // [★本章核心学习重点] 立即加锁保护，防止意外擦写
+}`,
       pitfalls: [
         "【致命大雷，必须刻在脑子里】擦除 Flash 只能擦空闲的最后一页（如第 63 页 0x0800FC00）！如果手抖擦了 0x08000000 起始的页面，你把自己正在运行的 main() 代码直接抹杀了，芯片瞬间变砖死机！",
         "【大白话避坑 2】Flash 有擦写寿命（STM32 内部 Flash 典型寿命约为 1 万次左右），绝对不能在 while(1) 循环里以几十毫秒的高频不停擦写，否则不出半天这块 Flash 扇区就被你磨损失灵了！",
@@ -588,29 +689,31 @@ int main(void) {
         notes: "写入一个 16 位半字耗时约 50 微秒，写入速度极快，但写入前必须保证该扇区已被整页擦除为 0xFFFF！"
       },
       codeSnippet: `/**
- * @brief  内部 Flash 最后一页掉电存储与读取芯片 ID
+ * @file    bsp_flash_uid.c
+ * @brief   STM32 内部 Flash 模拟 EEPROM 掉电存储 & 读取 96 位芯片唯一身份 UID
+ * @note    芯片 UID 基地址: 0x1FFFF7E8 (只读出厂序列号，可用于软件防盗防抄板)
  */
 #include "stm32f10x.h"
 
-#define USER_FLASH_PAGE_ADDR  0x0800FC00 // C8T6 最后一页 (第63页)
+#define USER_FLASH_ADDR   0x0800FC00 // C8T6 最后一页基地址 (Page 63)
+#define UID_BASE_ADDR     0x1FFFF7E8 // 96 位芯片唯一序列号只读起始地址
 
-void Flash_Save_Data(uint16_t val1, uint16_t val2) {
-    FLASH_Unlock();
-    FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
-    FLASH_ErasePage(USER_FLASH_PAGE_ADDR);
-    FLASH_ProgramHalfWord(USER_FLASH_PAGE_ADDR, val1);
-    FLASH_ProgramHalfWord(USER_FLASH_PAGE_ADDR + 2, val2);
-    FLASH_Lock();
+/**
+ * @brief  读取内部 Flash 数据 (Flash 在总线矩阵内与 RAM 统一寻址，可直接指针直读！)
+ */
+uint16_t Flash_ReadHalfWord(uint32_t address) {
+    return *((__IO uint16_t*)address);                         // [★本章核心学习重点] 内存映射直接指针解引用读取 Flash！
 }
 
-void Read_Chip_Signature(uint32_t *uid, uint16_t *flash_kb) {
-    // 1. 读取 Flash 真实容量 (KB)
-    *flash_kb = *(uint16_t *)(0x1FFFF7E0);
-    
-    // 2. 读取 96 位唯一身份 ID
-    uid[0] = *(uint32_t *)(0x1FFFF7E8);
-    uid[1] = *(uint32_t *)(0x1FFFF7EC);
-    uid[2] = *(uint32_t *)(0x1FFFF7F0);
+/**
+ * @brief  读取 96 位 (12 字节) 芯片独一无二的硬件 UID (防盗版核心)
+ * @param  uid_buf 长度为 3 的 uint32_t 数组指针
+ */
+void Get_Chip_UID(uint32_t *uid_buf) {
+    // 96 位 ID 连续存放在 3 个 32 位系统寄存器地址中
+    uid_buf[0] = *(__IO uint32_t*)(UID_BASE_ADDR);             // [★本章核心学习重点] 读取 UID 低 32 位 [31:0]
+    uid_buf[1] = *(__IO uint32_t*)(UID_BASE_ADDR + 0x04);      // [★本章核心学习重点] 读取 UID 中 32 位 [63:32]
+    uid_buf[2] = *(__IO uint32_t*)(UID_BASE_ADDR + 0x08);      // [★本章核心学习重点] 读取 UID 高 32 位 [95:64]
 }`,
       pitfalls: [
         "写入前如果忘记调用 FLASH_ClearFlag，若之前有报错残留，写入会直接被硬件拒绝且不报错！",
@@ -661,12 +764,37 @@ void Read_Chip_Signature(uint32_t *uid, uint16_t *flash_kb) {
         ],
         notes: "在 RTOS 下，两个任务像两个独立线程一样轮流抢占执行，彻底告别裸机 while(1) 轮询卡顿！"
       },
-      codeSnippet: `// 嵌入式技术进阶路线总览:
-// 阶段 1: 51 单片机 -> 理解寄存器与最基础的电平翻转
-// 阶段 2: STM32 标准库 (已通关) -> 深入 Cortex-M3 架构与复杂外设时序
-// 阶段 3: FreeRTOS 实时操作系统 -> 掌握多任务并发、信号量与时间片调度
-// 阶段 4: STM32CubeMX + HAL 库 -> 掌握现代化工程化快速开发与工业级项目落地
-`,
+      codeSnippet: `/**
+ * @file    main_framework.c
+ * @brief   工程级模块化单片机软件架构模板 (裸机时间片轮询前后台调度系统)
+ * @note    江科大进阶：告别死循环延时，构建高内聚低耦合的嵌入式驱动总线
+ */
+#include "stm32f10x.h"
+
+// 硬件外设初始化总调度中心
+void System_Hardware_Init(void) {
+    // 1. 初始化系统时钟为 72MHz
+    SystemInit();                                              // 72MHz HSE PLL 时钟树就绪
+    
+    // 2. 依次初始化各硬件总线模块
+    LED_Init();            // 板载 PC13 指示灯
+    Key_Init();            // 按键输入检测
+    USART1_Init(115200);   // 串口调试交互
+    MyRTC_Init();          // RTC 实时时钟日历 [★核心安全外设]
+    IWDG_Init_Config();    // 独立看门狗护航  [★核心安全外设]
+}
+
+int main(void) {
+    System_Hardware_Init();
+    
+    while (1) {
+        // [★本章核心学习重点] 时间片轮询调度框架：
+        // 模块 1: 处理传感器采集与通信解包
+        // 模块 2: 刷新 OLED 显示与按键状态机
+        // 模块 3: 周期性喂狗，保障死机硬件自恢复
+        IWDG_Feed();                                           // [★本章核心学习重点] 主循环安全喂狗保活
+    }
+}`,
       pitfalls: [
         "千万不要觉得学标准库是'无用功'：所有在 HAL 库里遇到的疑难死机 bug，底层原因全都在标准库这套时序和寄存器原理里！"
       ]
@@ -721,14 +849,43 @@ void Read_Chip_Signature(uint32_t *uid, uint16_t *flash_kb) {
         ],
         notes: "真实示波器直击：机械按键按下一瞬间金属片会剧烈弹跳 5~10ms，产生大量高频毛刺，这就是为什么必须写 Delay_ms(20) 软件消抖的硬件原因！"
       },
-      codeSnippet: `// 点亮板载 PC13 LED 的经典标准库配置
-GPIO_InitTypeDef GPIO_InitStructure;
-RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE);
-GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;
-GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-GPIO_Init(GPIOC, &GPIO_InitStructure);
-GPIO_ResetBits(GPIOC, GPIO_Pin_13); // 低电平点亮 PC13`,
+      codeSnippet: `/**
+ * @file    bsp_gpio.c
+ * @brief   STM32F103 GPIO 推挽输出驱动 PC13 板载 LED 与上拉输入驱动
+ * @note    板载 LED 硬件设计为低电平点亮，输出速度 50MHz
+ */
+#include "stm32f10x.h"
+
+/**
+ * @brief  初始化 PC13 板载 LED
+ */
+void LED_Init(void) {
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    // 1. 开启 GPIOC 外设时钟 (挂载在 APB2 高速总线上)
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE);      // [★本章核心学习重点] 开启 GPIOC APB2 总线时钟
+
+    // 2. 配置 PC13 引脚为通用推挽输出 (Out_PP)
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;                 // [★本章核心学习重点] 指定 PC13 引脚
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;           // [★本章核心学习重点] 模式：通用推挽输出
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;          // 输出转换速率 50MHz
+    GPIO_Init(GPIOC, &GPIO_InitStructure);                     // [★本章核心学习重点] 写入寄存器执行初始化
+
+    // 3. 默认输出高电平（熄灭 LED）
+    GPIO_SetBits(GPIOC, GPIO_Pin_13);                          // 输出高电平关灯
+}
+
+/**
+ * @brief  翻转 PC13 LED 状态
+ */
+void LED_Toggle(void) {
+    // 读出当前引脚输出锁存器电平，并取反写入
+    if (GPIO_ReadOutputDataBit(GPIOC, GPIO_Pin_13) == 0) {
+        GPIO_SetBits(GPIOC, GPIO_Pin_13);                      // [★本章核心学习重点] 拉高置位 (关灯)
+    } else {
+        GPIO_ResetBits(GPIOC, GPIO_Pin_13);                    // [★本章核心学习重点] 拉低清零 (点亮)
+    }
+}`,
       pitfalls: [
         "千万记得先开启 RCC 外设时钟！不给外设通时钟，写任何配置寄存器都是无效的白忙活。"
       ]
@@ -784,11 +941,55 @@ GPIO_ResetBits(GPIOC, GPIO_Pin_13); // 低电平点亮 PC13`,
         ],
         notes: "高电平持续时间越长，电机获得的平均电压越高，转速越快！舵机 0~180 度对应高电平脉宽 0.5ms~2.5ms。"
       },
-      codeSnippet: `// 产生 50Hz 舵机控制 PWM 信号配置:
-TIM_TimeBaseInitStructure.TIM_Period = 20000 - 1; // ARR = 20000
-TIM_TimeBaseInitStructure.TIM_Prescaler = 72 - 1;  // PSC = 72 (1MHz计数频)
-TIM_TimeBaseInit(TIM2, &TIM_TimeBaseInitStructure);
-TIM_SetCompare1(TIM2, 1500); // CCR = 1500 对应 1.5ms 舵机归中 90 度`,
+      codeSnippet: `/**
+ * @file    bsp_pwm.c
+ * @brief   TIM2 通用定时器通道 1 (PA0) 输出 50Hz PWM 伺服信号或呼吸灯驱动
+ * @note    主频 72MHz -> PSC=71 (1MHz计数频) -> ARR=19999 (周期 20ms = 50Hz)
+ */
+#include "stm32f10x.h"
+
+/**
+ * @brief  初始化 TIM2_CH1 (PA0) 输出比较 PWM
+ */
+void PWM_Init(void) {
+    GPIO_InitTypeDef GPIO_InitStructure;
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStructure;
+    TIM_OCInitTypeDef TIM_OCInitStructure;
+
+    // 1. 开启 GPIOA 与 TIM2 定时器外设时钟
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+
+    // 2. PA0 引脚配置为复用推挽输出 (AF_PP)
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;            // [★本章核心学习重点] 定时器硬件接管引脚，必须配为复用推挽！
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    // 3. 定时器时基单元配置 (ARR=20000-1, PSC=72-1)
+    TIM_TimeBaseInitStructure.TIM_Period = 20000 - 1;          // [★本章核心学习重点] 自动重装载值 ARR (决定 PWM 周期)
+    TIM_TimeBaseInitStructure.TIM_Prescaler = 72 - 1;          // [★本章核心学习重点] 预分频值 PSC (1MHz 计数频率)
+    TIM_TimeBaseInitStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseInitStructure.TIM_CounterMode = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM2, &TIM_TimeBaseInitStructure);
+
+    // 4. 定时器输出比较通道 1 (PWM 模式 1) 配置
+    TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;          // [★本章核心学习重点] 选择 PWM 模式 1 (CNT < CCR 输出有效电平)
+    TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+    TIM_OCInitStructure.TIM_Pulse = 1500;                      // 初始比较值 CCR (决定占空比)
+    TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;  // 高电平有效
+    TIM_OC1Init(TIM2, &TIM_OCInitStructure);                   // [★本章核心学习重点] 初始化通道 1 输出比较单元
+
+    // 5. 启动定时器总开关
+    TIM_Cmd(TIM2, ENABLE);                                     // [★本章核心学习重点] 使能 TIM2 开始计数
+}
+
+/**
+ * @brief  动态设置 PWM 占空比 (调整比较值 CCR)
+ */
+void PWM_SetCompare1(uint16_t ccr) {
+    TIM_SetCompare1(TIM2, ccr);                                // [★本章核心学习重点] 写入新 CCR 值动态修改占空比
+}`,
       pitfalls: [
         "舵机控制的 PWM 周期必须严格为 20ms (50Hz)，高电平持续 0.5ms~2.5ms 对应舵机 0 度~180 度！"
       ]
@@ -844,10 +1045,54 @@ TIM_SetCompare1(TIM2, 1500); // CCR = 1500 对应 1.5ms 舵机归中 90 度`,
         ],
         notes: "空闲高电平 -> 起始位拉低 104us -> 发送 0x41 (0b01000001，低位先发: 1,0,0,0,0,0,1,0) -> 停止位拉高 104us。示波器上看得一清二楚！"
       },
-      codeSnippet: `// 重定向 printf 到串口
+      codeSnippet: `/**
+ * @file    bsp_usart.c
+ * @brief   USART1 异步串口通信驱动 (PA9 TX, PA10 RX) 与 printf 重定向
+ * @note    波特率 115200 8-N-1 格式，支持中断接收与阻塞发送
+ */
+#include "stm32f10x.h"
+#include <stdio.h>
+
+/**
+ * @brief  初始化 USART1 串口
+ */
+void USART1_Init(uint32_t baudrate) {
+    GPIO_InitTypeDef GPIO_InitStructure;
+    USART_InitTypeDef USART_InitStructure;
+
+    // 1. 开启 GPIOA 与 USART1 外设时钟
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_USART1, ENABLE);
+
+    // 2. 配置 PA9 (TX 发送端) 为复用推挽输出
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;            // [★本章核心学习重点] TX 引脚必须设为复用推挽
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    // 3. 配置 PA10 (RX 接收端) 为浮空输入
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;      // [★本章核心学习重点] RX 引脚设为浮空输入
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    // 4. 配置 USART 参数 (波特率、8位数据、1位停止位、无校验)
+    USART_InitStructure.USART_BaudRate = baudrate;             // [★本章核心学习重点] 设定目标波特率
+    USART_InitStructure.USART_WordLength = USART_WordLength_8b;
+    USART_InitStructure.USART_StopBits = USART_StopBits_1;
+    USART_InitStructure.USART_Parity = USART_Parity_No;
+    USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+    USART_InitStructure.USART_Mode = USART_Mode_Tx | USART_Mode_Rx;
+    USART_Init(USART1, &USART_InitStructure);                  // [★本章核心学习重点] 初始化串口硬件结构
+
+    // 5. 使能 USART1
+    USART_Cmd(USART1, ENABLE);                                 // [★本章核心学习重点] 启动 USART1
+}
+
+/**
+ * @brief  重定向标准库 printf 到串口发送单个字节
+ */
 int fputc(int ch, FILE *f) {
-    USART_SendData(USART1, (uint8_t)ch);
-    while (USART_GetFlagStatus(USART1, USART_FLAG_TXE) == RESET);
+    USART_SendData(USART1, (uint8_t)ch);                       // [★本章核心学习重点] 将字符送入发送数据寄存器 TDR
+    while (USART_GetFlagStatus(USART1, USART_FLAG_TXE) == RESET); // [★本章核心学习重点] 阻塞等待发送缓冲区为空 (TXE=1)
     return ch;
 }`,
       pitfalls: [
@@ -906,12 +1151,46 @@ int fputc(int ch, FILE *f) {
         ],
         notes: "黄色 SCL 保持高电平时，青色 SDA 突然跳水产生下降沿（起始信号 Start）；随后的第 9 个时钟，SDA 被从机强力拉低产生第 9 位 ACK 应答！"
       },
-      codeSnippet: `// 软件 I2C 产生起始信号
+      codeSnippet: `/**
+ * @file    bsp_i2c.c
+ * @brief   软件模拟 I2C 通信总线底层时序驱动 (SCL: PB10, SDA: PB11 开漏输出)
+ * @note    支持高精度微秒延时、起始信号、停止信号、发送字节与接收 ACK 应答
+ */
+#include "stm32f10x.h"
+
+// 引脚电平宏定义
+#define I2C_W_SCL(x)  GPIO_WriteBit(GPIOB, GPIO_Pin_10, (BitAction)(x))
+#define I2C_W_SDA(x)  GPIO_WriteBit(GPIOB, GPIO_Pin_11, (BitAction)(x))
+#define I2C_R_SDA()   GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_11)
+
+/**
+ * @brief  产生 I2C 起始信号 (Start: SCL 高电平期间 SDA 产生下降沿)
+ */
 void MyI2C_Start(void) {
-    MyI2C_W_SDA(1);
-    MyI2C_W_SCL(1);
-    MyI2C_W_SDA(0); // SCL为高时，SDA拉低，表示通信开始
-    MyI2C_W_SCL(0);
+    I2C_W_SDA(1);
+    I2C_W_SCL(1);                                              // [★本章核心学习重点] SCL 处于高电平时
+    I2C_W_SDA(0);                                              // [★本章核心学习重点] SDA 产生从高拉低的下降沿 (触发 START)
+    I2C_W_SCL(0);                                              // 拉低 SCL 钳住总线准备发数据
+}
+
+/**
+ * @brief  产生 I2C 停止信号 (Stop: SCL 高电平期间 SDA 产生上升沿)
+ */
+void MyI2C_Stop(void) {
+    I2C_W_SDA(0);
+    I2C_W_SCL(1);                                              // [★本章核心学习重点] SCL 处于高电平时
+    I2C_W_SDA(1);                                              // [★本章核心学习重点] SDA 产生从低放开的上升沿 (触发 STOP)
+}
+
+/**
+ * @brief  I2C 发送 1 个字节 (MSB 高位先行)
+ */
+void MyI2C_SendByte(uint8_t byte) {
+    for (uint8_t i = 0; i < 8; i++) {
+        I2C_W_SDA(byte & (0x80 >> i));                         // [★本章核心学习重点] 依次输出最高位至最低位
+        I2C_W_SCL(1);                                          // 拉高 SCL 告知从机采样
+        I2C_W_SCL(0);                                          // 拉低 SCL 允许切换下一位数据
+    }
 }`,
       pitfalls: [
         "I2C 引脚如果忘了配开漏或者忘了接上拉电阻，总线电平会拉不起来导致读出全为 0xFF 或 0x00。"
@@ -972,19 +1251,62 @@ void MyI2C_Start(void) {
         ],
         notes: "CS 拉低开始通信；SCK 第 1 个上升沿捕获数据，第 2 个下降沿移出数据；8 个脉冲一气呵成，主机与从机同步完成 1 个字节的双向数据交换！"
       },
-      codeSnippet: `// 硬件 SPI 交换一个字节数据标准库函数
-uint8_t SPI_SwapByte(uint8_t byte) {
-    // 1. 等待发送缓冲区空 (TXE=1)
-    while (SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_TXE) == RESET);
+      codeSnippet: `/**
+ * @file    bsp_spi.c
+ * @brief   STM32 硬件 SPI1 全双工高速总线驱动 (SCK: PA5, MISO: PA6, MOSI: PA7)
+ * @note    SPI Mode 0 极性与相位 (CPOL=0, CPHA=0)，全双工移位同步交换字节
+ */
+#include "stm32f10x.h"
+
+/**
+ * @brief  初始化硬件 SPI1 控制器 (主模式，时钟 18MHz)
+ */
+void SPI1_Init(void) {
+    SPI_InitTypeDef SPI_InitStructure;
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_SPI1, ENABLE);
+
+    // SCK (PA5) 与 MOSI (PA7) 配置为复用推挽输出
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5 | GPIO_Pin_7;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    // MISO (PA6) 配置为上拉输入
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    // SPI 核心参数配置 (Mode 0: 静态低电平，奇数边缘采样)
+    SPI_InitStructure.SPI_Direction = SPI_Direction_2Lines_FullDuplex; // [★本章核心学习重点] 双线全双工通信
+    SPI_InitStructure.SPI_Mode = SPI_Mode_Master;                      // [★本章核心学习重点] 主机模式
+    SPI_InitStructure.SPI_DataSize = SPI_DataSize_8b;
+    SPI_InitStructure.SPI_CPOL = SPI_CPOL_Low;                         // [★本章核心学习重点] CPOL=0 时钟空闲低电平
+    SPI_InitStructure.SPI_CPHA = SPI_CPHA_1Edge;                       // [★本章核心学习重点] CPHA=0 第 1 个跳变沿采样
+    SPI_InitStructure.SPI_NSS = SPI_NSS_Soft;                          // 软件管理片选 CS
+    SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_4; // 72MHz / 4 = 18MHz
+    SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;                 // MSB 高位先行
+    SPI_Init(SPI1, &SPI_InitStructure);
+
+    SPI_Cmd(SPI1, ENABLE);                                             // [★本章核心学习重点] 开启 SPI1 总线
+}
+
+/**
+ * @brief  硬件 SPI 发送并同步接收 1 个字节 (移位交换)
+ */
+uint8_t SPI1_SwapByte(uint8_t byte) {
+    // 1. 等待发送缓冲区为空 (TXE=1)
+    while (SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_TXE) == RESET);   // [★本章核心学习重点] 阻塞等待发送缓冲区空
     
-    // 2. 写入数据到发送寄存器
-    SPI_I2S_SendData(SPI1, byte);
+    // 2. 将数据写入发送寄存器
+    SPI_I2S_SendData(SPI1, byte);                                      // [★本章核心学习重点] 写入数据并启动移位时序
     
     // 3. 等待接收缓冲区非空 (RXNE=1)
-    while (SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_RXNE) == RESET);
+    while (SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_RXNE) == RESET);  // [★本章核心学习重点] 阻塞等待接收缓冲区满
     
-    // 4. 返回收到的字节
-    return SPI_I2S_ReceiveData(SPI1);
+    // 4. 读取从机送回来的数据
+    return SPI_I2S_ReceiveData(SPI1);                                  // [★本章核心学习重点] 返回收到的字节
 }`,
       pitfalls: [
         "对 W25Q64 写入前必须先发送 0x06 (写使能)，且每次写入不得超过一页 (256 字节) 的边界，否则地址会回卷发生覆盖！"
