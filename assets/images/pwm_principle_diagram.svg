@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" width="100%" height="100%">
+  <!-- 背景 -->
+  <rect width="900" height="520" fill="#070a13" rx="12"/>
+  <rect x="2" y="2" width="896" height="516" fill="none" stroke="#1e293b" stroke-width="1.5" rx="10"/>
+
+  <!-- 标题 -->
+  <text x="30" y="38" fill="#00f0ff" font-family="'JetBrains Mono', Consolas, sans-serif" font-size="18" font-weight="bold">TIM 定时器输出比较 (OC) 与 PWM 占空比生成原理</text>
+  <text x="30" y="58" fill="#64748b" font-family="sans-serif" font-size="12">江科大 P15 [6-3] PWM 生成物理机制与公式推导 · 矢量高清图解</text>
+
+  <!-- 绘图区 -->
+  <g transform="translate(60, 85)">
+    <!-- 锯齿波与 CCR 比较区域 -->
+    <rect width="780" height="230" fill="#090e1a" stroke="#1e293b" rx="8"/>
+
+    <!-- Y 轴参考虚线 -->
+    <!-- ARR 顶线 -->
+    <line x1="80" y1="30" x2="750" y2="30" stroke="#f87171" stroke-width="1.5" stroke-dasharray="4,4"/>
+    <text x="70" y="34" fill="#f87171" font-family="monospace" font-size="12" text-anchor="end" font-weight="bold">ARR (重装载值)</text>
+
+    <!-- CCR 比较线 -->
+    <line x1="80" y1="100" x2="750" y2="100" stroke="#facc15" stroke-width="2" stroke-dasharray="6,4"/>
+    <text x="70" y="104" fill="#facc15" font-family="monospace" font-size="12" text-anchor="end" font-weight="bold">CCR (捕获/比较值)</text>
+
+    <!-- 0 底线 -->
+    <line x1="80" y1="180" x2="750" y2="180" stroke="#64748b" stroke-width="1.5"/>
+    <text x="70" y="184" fill="#94a3b8" font-family="monospace" font-size="12" text-anchor="end">0 (计数值起点)</text>
+
+    <!-- 计数器 CNT 锯齿波上升曲线 (3个完整周期) -->
+    <!-- 周期 1: 80 -> 290 -->
+    <line x1="80" y1="180" x2="290" y2="30" stroke="#38bdf8" stroke-width="3"/>
+    <line x1="290" y1="30" x2="290" y2="180" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="2,2"/>
+    
+    <!-- 周期 2: 290 -> 500 -->
+    <line x1="290" y1="180" x2="500" y2="30" stroke="#38bdf8" stroke-width="3"/>
+    <line x1="500" y1="30" x2="500" y2="180" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="2,2"/>
+
+    <!-- 周期 3: 500 -> 710 -->
+    <line x1="500" y1="180" x2="710" y2="30" stroke="#38bdf8" stroke-width="3"/>
+    <line x1="710" y1="30" x2="710" y2="180" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="2,2"/>
+
+    <!-- CNT 标注 -->
+    <text x="180" y="130" fill="#38bdf8" font-size="12" font-weight="bold">CNT 递增计数</text>
+
+    <!-- 下半部: 生成的 PWM 方波输出 -->
+    <line x1="80" y1="210" x2="750" y2="210" stroke="#334155" stroke-width="1"/>
+    <text x="20" y="222" fill="#00ff88" font-size="11" font-weight="bold">PWM 输出</text>
+
+    <!-- 周期 1 方波: 当 CNT < CCR (高电平), 当 CNT >= CCR (低电平) -->
+    <!-- 交点在 x = 80 + (210 * 80/150) = 192 -->
+    <path d="M 80 200 L 192 200 L 192 225 L 290 225 
+             L 290 200 L 402 200 L 402 225 L 500 225 
+             L 500 200 L 612 200 L 612 225 L 710 225 L 710 200" 
+          fill="none" stroke="#00ff88" stroke-width="2.5"/>
+  </g>
+
+  <!-- 底部两个核心公式卡片 -->
+  <g transform="translate(60, 335)">
+    <!-- 卡片 1: 频率公式 -->
+    <rect width="375" height="150" fill="rgba(15, 23, 42, 0.9)" stroke="#38bdf8" stroke-width="1.2" rx="8"/>
+    <text x="20" y="30" fill="#00f0ff" font-size="14" font-weight="bold">① PWM 输出频率计算公式：</text>
+    <rect x="20" y="45" width="335" height="40" fill="#1e293b" rx="6"/>
+    <text x="187" y="70" fill="#facc15" font-family="'JetBrains Mono', monospace" font-size="13" text-anchor="middle" font-weight="bold">Freq = 72MHz / (PSC + 1) / (ARR + 1)</text>
+    <text x="20" y="110" fill="#cbd5e1" font-size="11.5">• PSC：预分频系数 (时钟降速)</text>
+    <text x="20" y="130" fill="#cbd5e1" font-size="11.5">• ARR：自动重装载值 (决定 1 个 PWM 周期持续多久)</text>
+  </g>
+
+  <g transform="translate(465, 335)">
+    <!-- 卡片 2: 占空比公式 -->
+    <rect width="375" height="150" fill="rgba(15, 23, 42, 0.9)" stroke="#00ff88" stroke-width="1.2" rx="8"/>
+    <text x="20" y="30" fill="#00ff88" font-size="14" font-weight="bold">② PWM 占空比 (Duty Cycle) 公式：</text>
+    <rect x="20" y="45" width="335" height="40" fill="#1e293b" rx="6"/>
+    <text x="187" y="70" fill="#00ff88" font-family="'JetBrains Mono', monospace" font-size="13" text-anchor="middle" font-weight="bold">Duty = CCR / (ARR + 1) × 100%</text>
+    <text x="20" y="110" fill="#cbd5e1" font-size="11.5">• CCR：比较值 (调节高电平时间，控制电机油门/舵机角)</text>
+    <text x="20" y="130" fill="#cbd5e1" font-size="11.5">• 当 CNT &lt; CCR 输出有效高电平；CNT ≥ CCR 输出低电平</text>
+  </g>
+</svg>

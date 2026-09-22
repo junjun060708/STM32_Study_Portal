@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>STM32F103 进阶极客研习社 - 江科大进阶实战工作台</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ================= 顶部 HUD 硬件监视栏 ================= -->
+  <header class="hud-header">
+    <div class="hud-logo">
+      <div class="hud-chip-icon">M3</div>
+      <div class="hud-title-wrap">
+        <h1>
+          <span>STM32F103 学习工作台</span>
+          <span class="hud-badge">STD-LIB V3.5.0</span>
+        </h1>
+      </div>
+    </div>
+
+    <!-- 硬件状态监控 Pill 组 -->
+    <div class="hud-status-group">
+      <div class="hud-pill">
+        <span class="hud-dot"></span>
+        <span>主频: <strong id="hud-freq" style="color: var(--cyan-primary);">72MHz</strong></span>
+      </div>
+      <div class="hud-pill">
+        <span>模式: <strong id="hud-mode" style="color: var(--green-neon);">SYS_ACTIVE</strong></span>
+      </div>
+      <div class="hud-pill" id="hud-progress">
+        <span>学习打卡: <strong style="color:var(--green-neon);">0/17</strong> (0%)</span>
+      </div>
+      <button class="btn-copy-code" id="btn-open-deploy" style="background: rgba(0, 240, 255, 0.15); border-color: var(--cyan-primary); color: var(--cyan-primary);">
+        🌐 让所有人/手机打开
+      </button>
+    </div>
+
+    <!-- 手机端汉堡折叠按钮 -->
+    <button class="hud-mobile-toggle" id="mobile-toggle">
+      ☰ 选集目录
+    </button>
+  </header>
+
+  <!-- 手机端侧边栏遮罩 -->
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+  <!-- ================= 主应用布局 ================= -->
+  <div class="app-container">
+    
+    <!-- 左侧章节导航抽屉 (手风琴分类 + 实时搜索) -->
+    <aside class="sidebar" id="sidebar">
+      
+      <!-- 搜索过滤栏 -->
+      <div class="sidebar-search-box">
+        <span class="search-icon-pos">🔍</span>
+        <input type="text" id="nav-search" class="nav-search-input" placeholder="搜索外设/原理 (如: 低功耗, 看门狗, Flash)...">
+      </div>
+
+      <!-- 分类章节导航列表 -->
+      <nav class="chapter-nav-list" id="chapter-nav">
+        <!-- 由 js/app.js 动态填充 -->
+      </nav>
+
+      <!-- 底部硬件安全提示 -->
+      <div class="sidebar-bottom-info">
+        <strong>⚠️ 硬件安全与实战基准</strong><br>
+        • ST-Link 保护：严禁复用 <code>PA13/PA14</code> 调试引脚。<br>
+        • 板载 LED：默认 <code>PC13</code> 通用推挽输出，低电平点亮。<br>
+        • 代码规范：STM32F10x 标准库 V3.5.0，UTF-8 编码。
+      </div>
+    </aside>
+
+    <!-- 中右侧核心内容展示区 -->
+    <main class="main-content" id="main-content">
+      <!-- 由 js/app.js 动态渲染章节内容与动态交互沙盘 -->
+    </main>
+
+  </div>
+
+  <!-- ================= 全球上线 GitHub Pages 指南弹窗 ================= -->
+  <div class="modal-overlay" id="deploy-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2>🚀 如何让任何人的手机和电脑随时随地访问此网站？</h2>
+        <button class="modal-close" id="modal-close">&times;</button>
+      </div>
+      
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+        因为本项目是<strong>纯前端免配置静态网页</strong>，你可以直接把它免费发布到 <strong>GitHub Pages</strong>。无需买服务器、无需域名备案，全球秒开！
+      </p>
+
+      <div class="modal-step">
+        <strong>第一步：在 GitHub 上新建仓库</strong><br>
+        登录 GitHub，点击右上角 “New repository”，新建一个公开仓库，例如命名为 <code>stm32-study</code>。
+      </div>
+
+      <div class="modal-step">
+        <strong>第二步：将本项目文件上传到该仓库</strong><br>
+        将本文件夹 <code>D:\Antigravity\STM32_Study_Portal</code> 下的所有文件（<code>index.html</code>、<code>css/</code>、<code>js/</code>、<code>README.md</code>）推送到该 GitHub 仓库的 <code>main</code> 分支根目录下。
+      </div>
+
+      <div class="modal-step">
+        <strong>第三步：一键开启 GitHub Pages</strong><br>
+        在 GitHub 仓库页面点击 <strong>Settings</strong> -> 左侧菜单点击 <strong>Pages</strong> -> 在 “Build and deployment” 下的 Branch 选择 <code>main</code> 分支与 <code>/ (root)</code> 目录，点击 <strong>Save</strong>。
+      </div>
+
+      <div class="modal-step" style="border-left: 3px solid var(--green-neon); background: rgba(0,255,136,0.06);">
+        <strong>第四步：完成！获取专属公开网址</strong><br>
+        等待大约 1 分钟刷新，GitHub 会为你生成一个专属链接：<br>
+        <code style="color: var(--cyan-primary); font-size: 13px;">https://&lt;你的GitHub用户名&gt;.github.io/stm32-study/</code><br>
+        把这个链接发给同学、老师，或者在微信与手机浏览器中点开，任何人随时随地都能学习！
+      </div>
+    </div>
+  </div>
+
+  <!-- 引入逻辑脚本 -->
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

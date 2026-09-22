@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" width="100%" height="100%">
+  <defs>
+    <filter id="boxShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="900" height="540" fill="#070a13" rx="12"/>
+  <rect x="2" y="2" width="896" height="536" fill="none" stroke="#1e293b" stroke-width="1.5" rx="10"/>
+
+  <!-- 标题 -->
+  <text x="30" y="38" fill="#00f0ff" font-family="'JetBrains Mono', Consolas, sans-serif" font-size="18" font-weight="bold">STM32 内部四级供电分区与低功耗切断架构</text>
+  <text x="30" y="58" fill="#64748b" font-family="sans-serif" font-size="12">江科大 P44 [13-1] 电源控制章节核心拓扑 · 矢量高清图解</text>
+
+  <!-- ================= 供电域 1: VDD 域 ================= -->
+  <g transform="translate(40, 90)">
+    <rect width="240" height="260" fill="rgba(15, 23, 42, 0.7)" stroke="#38bdf8" stroke-width="1.5" rx="8" filter="url(#boxShadow)"/>
+    <rect x="0" y="0" width="240" height="34" fill="rgba(56, 189, 248, 0.15)" rx="8"/>
+    <text x="12" y="22" fill="#38bdf8" font-size="13" font-weight="bold">① VDD 主供电域 (2.0~3.6V)</text>
+    
+    <text x="15" y="60" fill="#cbd5e1" font-size="12">• I/O 引脚电路 (大部分 GPIO)</text>
+    <text x="15" y="90" fill="#cbd5e1" font-size="12">• 复位发生器 (POR / PDR)</text>
+    <text x="15" y="120" fill="#cbd5e1" font-size="12">• PVD 可编程电压监测器</text>
+    <text x="15" y="150" fill="#cbd5e1" font-size="12">• 待机唤醒逻辑 (WKUP / PA0)</text>
+    <text x="15" y="180" fill="#cbd5e1" font-size="12">• 内部时钟发生器 (HSI / HSE)</text>
+    
+    <rect x="10" y="210" width="220" height="36" fill="#1e293b" rx="4"/>
+    <text x="120" y="232" fill="#94a3b8" font-size="11" text-anchor="middle">主电源接通期间常开</text>
+  </g>
+
+  <!-- 中间连接箭头: VDD 进 LDO 产生 1.8V -->
+  <path d="M 280 220 L 330 220" stroke="#00f0ff" stroke-width="2.5" marker-end="url(#arrow)" stroke-dasharray="4,4"/>
+  <text x="305" y="210" fill="#00f0ff" font-size="11" text-anchor="middle" font-weight="bold">降压</text>
+
+  <!-- ================= 供电域 2: 1.8V 内核域 (LDO 供电) ================= -->
+  <g transform="translate(330, 90)">
+    <rect width="260" height="260" fill="rgba(15, 23, 42, 0.7)" stroke="#c084fc" stroke-width="1.5" rx="8" filter="url(#boxShadow)"/>
+    <rect x="0" y="0" width="260" height="34" fill="rgba(192, 132, 252, 0.15)" rx="8"/>
+    <text x="12" y="22" fill="#c084fc" font-size="13" font-weight="bold">② 1.8V 内核供电域 (经 LDO 稳压)</text>
+    
+    <text x="15" y="60" fill="#cbd5e1" font-size="12">• ARM Cortex-M3 CPU 运算内核</text>
+    <text x="15" y="90" fill="#cbd5e1" font-size="12">• 20KB 片上高速 SRAM (变量存此)</text>
+    <text x="15" y="120" fill="#cbd5e1" font-size="12">• 64KB Flash 闪存读写控制总线</text>
+    <text x="15" y="150" fill="#cbd5e1" font-size="12">• AHB / APB 数字外设 (TIM, USART等)</text>
+    
+    <!-- 状态指示 -->
+    <rect x="10" y="185" width="240" height="60" fill="#1e293b" rx="4"/>
+    <text x="15" y="205" fill="#facc15" font-size="11">● 睡眠模式：CPU 停，外设开，SRAM保</text>
+    <text x="15" y="223" fill="#f87171" font-size="11">● 停止模式：时钟全停，LDO低功耗，SRAM保</text>
+    <text x="15" y="239" fill="#ef4444" font-size="11">● 待机模式：LDO完全关断！SRAM数据全蒸发</text>
+  </g>
+
+  <!-- ================= 供电域 3: VBAT 备份域 ================= -->
+  <g transform="translate(620, 90)">
+    <rect width="240" height="260" fill="rgba(15, 23, 42, 0.7)" stroke="#00ff88" stroke-width="1.5" rx="8" filter="url(#boxShadow)"/>
+    <rect x="0" y="0" width="240" height="34" fill="rgba(0, 255, 136, 0.15)" rx="8"/>
+    <text x="12" y="22" fill="#00ff88" font-size="13" font-weight="bold">③ 备份供电域 (VBAT 纽扣电池)</text>
+    
+    <text x="15" y="60" fill="#cbd5e1" font-size="12">• RTC 32 位实时时钟秒计数器</text>
+    <text x="15" y="90" fill="#cbd5e1" font-size="12">• BKP 备份寄存器 (保存加密暗号)</text>
+    <text x="15" y="120" fill="#cbd5e1" font-size="12">• LSE 32.768kHz 外部低速晶振</text>
+    <text x="15" y="150" fill="#cbd5e1" font-size="12">• TAMPER 侵入检测与复位控制</text>
+
+    <!-- 内部双电源自动切换开关 -->
+    <rect x="10" y="185" width="220" height="60" fill="#1e293b" stroke="#00ff88" stroke-dasharray="2,2" rx="4"/>
+    <text x="120" y="208" fill="#00ff88" font-size="11" text-anchor="middle" font-weight="bold">内部硬件电源切换开关</text>
+    <text x="120" y="228" fill="#94a3b8" font-size="10.5" text-anchor="middle">VDD在用VDD；VDD断电切到VBAT</text>
+  </g>
+
+  <!-- 底部对比速查表格 -->
+  <g transform="translate(40, 375)">
+    <rect width="820" height="135" fill="rgba(15, 23, 42, 0.9)" stroke="#334155" stroke-width="1" rx="8"/>
+    
+    <!-- 表头 -->
+    <rect x="0" y="0" width="820" height="30" fill="#1e293b" rx="8"/>
+    <text x="60" y="20" fill="#94a3b8" font-size="12" font-weight="bold">模式</text>
+    <text x="170" y="20" fill="#94a3b8" font-size="12" font-weight="bold">CPU 与外设</text>
+    <text x="320" y="20" fill="#94a3b8" font-size="12" font-weight="bold">SRAM / 寄存器</text>
+    <text x="490" y="20" fill="#94a3b8" font-size="12" font-weight="bold">唤醒方式</text>
+    <text x="700" y="20" fill="#94a3b8" font-size="12" font-weight="bold">典型电流</text>
+
+    <!-- 行 1: 睡眠 -->
+    <text x="60" y="55" fill="#38bdf8" font-size="12" font-weight="bold">睡眠 (Sleep)</text>
+    <text x="170" y="55" fill="#cbd5e1" font-size="11.5">CPU 停止，外设全开</text>
+    <text x="320" y="55" fill="#00ff88" font-size="11.5">数据完整保持</text>
+    <text x="490" y="55" fill="#cbd5e1" font-size="11.5">任一中断 / 事件</text>
+    <text x="700" y="55" fill="#facc15" font-size="12" font-weight="bold">~ 11 mA</text>
+
+    <!-- 行 2: 停止 -->
+    <text x="60" y="85" fill="#c084fc" font-size="12" font-weight="bold">停止 (Stop)</text>
+    <text x="170" y="85" fill="#cbd5e1" font-size="11.5">时钟全停 (HSI/HSE/PLL关)</text>
+    <text x="320" y="85" fill="#00ff88" font-size="11.5">数据完整保持 (LDO低功耗)</text>
+    <text x="490" y="85" fill="#c084fc" font-size="11.5">任意 EXTI 外部中断</text>
+    <text x="700" y="85" fill="#00ff88" font-size="12" font-weight="bold">~ 24 µA (微安级)</text>
+
+    <!-- 行 3: 待机 -->
+    <text x="60" y="115" fill="#ef4444" font-size="12" font-weight="bold">待机 (Standby)</text>
+    <text x="170" y="115" fill="#cbd5e1" font-size="11.5">1.8V 域完全断电</text>
+    <text x="320" y="115" fill="#ef4444" font-size="11.5">SRAM数据全部丢失 (仅BKP在)</text>
+    <text x="490" y="115" fill="#ef4444" font-size="11.5">WKUP(PA0)、RTC闹钟、复位</text>
+    <text x="700" y="115" fill="#00ff88" font-size="12" font-weight="bold">~ 2 µA (极限省电)</text>
+  </g>
+</svg>

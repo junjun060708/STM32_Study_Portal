@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" width="100%" height="100%">
+  <!-- 背景 -->
+  <rect width="900" height="520" fill="#070a13" rx="12"/>
+  <rect x="2" y="2" width="896" height="516" fill="none" stroke="#1e293b" stroke-width="1.5" rx="10"/>
+
+  <!-- 标题 -->
+  <text x="30" y="38" fill="#00f0ff" font-family="'JetBrains Mono', Consolas, sans-serif" font-size="18" font-weight="bold">SPI 四种通信模式 (Mode 0 ~ 3) 时钟极性与相位对照图</text>
+  <text x="30" y="58" fill="#64748b" font-family="sans-serif" font-size="12">江科大 P36 [11-1] CPOL (极性) 与 CPHA (相位) 核心概念 · 矢量高清图解</text>
+
+  <!-- 4个模式的网格对比卡片 -->
+  <!-- 模式 0: CPOL=0, CPHA=0 (最常用!) -->
+  <g transform="translate(40, 85)">
+    <rect width="390" height="180" fill="rgba(0, 255, 136, 0.08)" stroke="#00ff88" stroke-width="1.5" rx="8"/>
+    <text x="15" y="26" fill="#00ff88" font-size="13" font-weight="bold">★ 模式 0 (CPOL=0, CPHA=0) [单片机最常用模式]</text>
+    <text x="15" y="46" fill="#94a3b8" font-size="11">空闲时钟 SCK 为低电平；在第 1 个边沿（上升沿）采样数据</text>
+    
+    <!-- 波形 -->
+    <path d="M 20 80 L 60 80 L 60 120 L 100 120 L 100 80 L 140 80 L 140 120 L 180 120 L 180 80 L 220 80 L 220 120 L 260 120 L 260 80 L 300 80 L 300 120 L 340 120 L 340 80 L 370 80" 
+          fill="none" stroke="#facc15" stroke-width="2"/>
+    <text x="20" y="150" fill="#facc15" font-size="11" font-family="monospace">SCK: 空闲低 -> 上升沿捕获数据</text>
+  </g>
+
+  <!-- 模式 1: CPOL=0, CPHA=1 -->
+  <g transform="translate(470, 85)">
+    <rect width="390" height="180" fill="rgba(15, 23, 42, 0.7)" stroke="#38bdf8" stroke-width="1" rx="8"/>
+    <text x="15" y="26" fill="#38bdf8" font-size="13" font-weight="bold">模式 1 (CPOL=0, CPHA=1)</text>
+    <text x="15" y="46" fill="#94a3b8" font-size="11">空闲时钟 SCK 为低电平；在第 2 个边沿（下降沿）采样数据</text>
+    
+    <path d="M 20 80 L 60 80 L 60 120 L 100 120 L 100 80 L 140 80 L 140 120 L 180 120 L 180 80 L 220 80 L 220 120 L 260 120 L 260 80 L 300 80 L 300 120 L 340 120 L 340 80 L 370 80" 
+          fill="none" stroke="#facc15" stroke-width="2"/>
+    <text x="20" y="150" fill="#facc15" font-size="11" font-family="monospace">SCK: 空闲低 -> 下降沿捕获数据</text>
+  </g>
+
+  <!-- 模式 2: CPOL=1, CPHA=0 -->
+  <g transform="translate(40, 285)">
+    <rect width="390" height="180" fill="rgba(15, 23, 42, 0.7)" stroke="#c084fc" stroke-width="1" rx="8"/>
+    <text x="15" y="26" fill="#c084fc" font-size="13" font-weight="bold">模式 2 (CPOL=1, CPHA=0)</text>
+    <text x="15" y="46" fill="#94a3b8" font-size="11">空闲时钟 SCK 为高电平；在第 1 个边沿（下降沿）采样数据</text>
+    
+    <path d="M 20 120 L 60 120 L 60 80 L 100 80 L 100 120 L 140 120 L 140 80 L 180 80 L 180 120 L 220 120 L 220 80 L 260 80 L 260 120 L 300 120 L 300 80 L 340 80 L 340 120 L 370 120" 
+          fill="none" stroke="#facc15" stroke-width="2"/>
+    <text x="20" y="150" fill="#facc15" font-size="11" font-family="monospace">SCK: 空闲高 -> 下降沿捕获数据</text>
+  </g>
+
+  <!-- 模式 3: CPOL=1, CPHA=1 (次常用) -->
+  <g transform="translate(470, 285)">
+    <rect width="390" height="180" fill="rgba(15, 23, 42, 0.7)" stroke="#38bdf8" stroke-width="1" rx="8"/>
+    <text x="15" y="26" fill="#38bdf8" font-size="13" font-weight="bold">模式 3 (CPOL=1, CPHA=1)</text>
+    <text x="15" y="46" fill="#94a3b8" font-size="11">空闲时钟 SCK 为高电平；在第 2 个边沿（上升沿）采样数据</text>
+    
+    <path d="M 20 120 L 60 120 L 60 80 L 100 80 L 100 120 L 140 120 L 140 80 L 180 80 L 180 120 L 220 120 L 220 80 L 260 80 L 260 120 L 300 120 L 300 80 L 340 80 L 340 120 L 370 120" 
+          fill="none" stroke="#facc15" stroke-width="2"/>
+    <text x="20" y="150" fill="#facc15" font-size="11" font-family="monospace">SCK: 空闲高 -> 上升沿捕获数据</text>
+  </g>
+
+  <!-- 底部精髓口诀 -->
+  <text x="450" y="495" fill="#facc15" font-size="12" text-anchor="middle" font-weight="bold">
+    💡 记忆秘诀：CPOL=0 默认低，CPOL=1 默认高；CPHA=0 前沿采，CPHA=1 后沿采！绝大多数传感器 (如 W25Q64) 默认采用模式 0 或 3。
+  </text>
+</svg>
